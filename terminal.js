@@ -8,7 +8,7 @@ const contrib = require('blessed-contrib')
 const moment = require('moment')
 const mqtt = require('mqtt')
 
-const mqttClient  = mqtt.connect('mqtt://192.168.10.10:1883')
+const mqttClient  = mqtt.connect(process.env.MQTTHOST) // 'mqtt://192.168.10.10:1883'
 
 const screen = blessed.screen()
 
@@ -40,15 +40,15 @@ const metricsTable = grid.set(0, 1, 1, 3, contrib.table, {
 })
 
 mqttClient.on('connect', () => {
-    mqttClient.subscribe('connectedTourniquets', () => {});
-    mqttClient.subscribe('disconnectedTourniquets', () => {});
+    mqttClient.subscribe(process.env.TOPIC_CONNECTED_TOURNIQUET, () => {}); // 'connectedTourniquets'
+    mqttClient.subscribe(process.env.TOPIC_DISCONNECTED_TOURNIQUET, () => {}); // 'disconnectedTourniquets'
 })
 
 mqttClient.on('message', function (topic, message) {
     // message is Buffer
     console.log(message.toString())  
     switch (topic) {
-        case 'connectedTourniquets':
+        case process.env.TOPIC_CONNECTED_TOURNIQUET:
             if (!tourniquets.has(message)) {
                 tourniquets.set(message,true)
                 tourniquetsMetrics.set(message, {})
