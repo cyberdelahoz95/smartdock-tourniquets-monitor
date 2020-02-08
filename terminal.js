@@ -1,178 +1,143 @@
 #!/usr/bin/env node
-
-'use strict'
-
 /* eslint new-cap: "off" */
-const blessed = require('blessed')
-const contrib = require('blessed-contrib')
-const moment = require('moment')
-const mqtt = require('mqtt')
 
-const mqttClient  = mqtt.connect(process.env.MQTTHOST) // 'mqtt://192.168.10.10:1883'
+'use strict';
 
-const screen = blessed.screen()
+if (process.env.NODE_ENV !== 'production') {
+  require('dotenv').config();
+}
 
-const tourniquets = new Map()
-const tourniquetsMetrics = new Map()
+const blessed = require('blessed');
+const contrib = require('blessed-contrib');
+const moment = require('moment');
+const follow = require('text-file-follower');
 
-let extended = []
+const follower = follow('/home/cyberdelahoz95/Developer/service.log');
+let connectedCount = 0;
+
+const screen = blessed.screen();
+
+const tourniquets = new Map();
+const connectedTourniquets = [];
 
 let selected = {
-    ip: null,
-    type: null
-}
+  ip: null,
+};
 
 const grid = new contrib.grid({
-    rows: 2,
-    cols: 4,
-    screen
-})
-
-const tree = grid.set(0, 0, 1, 1, contrib.tree, {
-    label: 'Torniquetes'
-})
-
-const metricsTable = grid.set(0, 1, 1, 3, contrib.table, {
-    label: 'Lecturas',
-    showLegend: true,
-    minY: 0,
-    xPadding: 5
-})
-
-mqttClient.on('connect', () => {
-    mqttClient.subscribe(process.env.TOPIC_CONNECTED_TOURNIQUET, () => {}); // 'connectedTourniquets'
-    mqttClient.subscribe(process.env.TOPIC_DISCONNECTED_TOURNIQUET, () => {}); // 'disconnectedTourniquets'
-})
-
-mqttClient.on('message', function (topic, message) {
-    // message is Buffer
-    console.log(message.toString())  
-    switch (topic) {
-        case process.env.TOPIC_CONNECTED_TOURNIQUET:
-            if (!tourniquets.has(message)) {
-                tourniquets.set(message,true)
-                tourniquetsMetrics.set(message, {})
-            }
-        break;
-    }
-    renderData()
+  rows: 2,
+  cols: 5,
+  screen
 });
 
-agent.on('agent/disconnected', payload => {
-  const { uuid } = payload.agent
+const tree = grid.set(0, 0, 1, 1, contrib.tree, {
+  label: 'Torniquetes detectados'
+});
 
-  if (agents.has(uuid)) {
-    agents.delete(uuid)
-    agentMetrics.delete(uuid)
-  }
+const codesLogs = grid.set(0,1,1,1, contrib.log,{
+  fg: "green",
+  selectedFg: "green", 
+  label: 'Codigos Recibidos'
+});
 
-  renderData()
-})
+const responseLogs = grid.set(0,2,1,1, contrib.log,{
+  fg: "green",
+  selectedFg: "green", 
+  label: 'Resultados'
+});
 
-agent.on('agent/message', payload => {
-  const { uuid } = payload.agent
-  const { timestamp } = payload
+const confirmLogs = grid.set(0,3,1,1, contrib.log,{
+  fg: "green",
+  selectedFg: "green", 
+  label: 'Confirmaciones'
+});
 
-  if (!agents.has(uuid)) {
-    agents.set(uuid, payload.agent)
-    agentMetrics.set(uuid, {})
-  }
+const errorLogs = grid.set(0,4,1,1, contrib.log,{
+  fg: "red",
+  selectedFg: "red", 
+  label: 'Errores'
+});
 
-  const metrics = agentMetrics.get(uuid)
+const line = grid.set(1, 0, 1, 5, contrib.line, {
+  label: 'Actividad',
+  showLegend: true,
+  minY: 0,
+  wholeNumbersOnly: true,
+  xPadding: 5
+});
 
-  payload.metrics.forEach(m => {
-    const { type, value } = m
-
-    if (!Array.isArray(metrics[type])) {
-      metrics[type] = []
-    }
-
-    const length = metrics[type].length
-    if (length >= 20) {
-      metrics[type].shift()
-    }
-
-    metrics[type].push({
-      value,
-      timestamp: moment(timestamp).format('HH:mm:ss')
-    })
-  })
-
-  renderData()
-})
-
-tree.on('select', node => {
-  const { uuid } = node
-
-  if (node.agent) {
-    node.extended ? extended.push(uuid) : extended = extended.filter(e => e !== uuid)
-    selected.uuid = null
-    selected.type = null
-    return
-  }
-
-  selected.uuid = uuid
-  selected.type = node.type
-
-  renderMetric()
-})
-
-function renderData () {
-  const treeData = {}
-  let idx = 0
-  for (let [ uuid, val ] of agents) {
-    const title = ` ${val.name} - (${val.pid})`
-    treeData[title] = {
-      uuid,
-      agent: true,
-      extended: extended.includes(uuid),
-      children: {}
-    }
-
-    const metrics = agentMetrics.get(uuid)
-    Object.keys(metrics).forEach(type => {
-      const metric = {
-        uuid,
-        type,
-        metric: true
+follower.on('line', (_filename, line) => {
+  const message = line.split('-');    
+  switch (message[0]) {
+    case process.env.CONNECTED:      
+      connectedCount++;      
+      if(!tourniquets.has(message[1])){ // message[1] contains IP of connected tourniquet
+        tourniquets.set(message[1],{barcodes:[],confirmations:[],errors:[], responses:[]});
       }
-
-      const metricName = ` ${type} ${' '.repeat(1000)} ${idx++}`
-      treeData[title].children[metricName] = metric
-    })
+      connectedTourniquets.push({timestamp:moment().format('HH:mm:ss'),connected:connectedCount});
+    break;
+    case process.env.BARCODE:
+      if(selected.ip && selected.ip === message[1])
+        codesLogs.log(`${message[1]} - ${message[2]}`);
+    break;
+    case process.env.RESPONSE:
+      if(selected.ip && selected.ip === message[1])
+        responseLogs.log(`${message[1]} - ${message[2]} - ${message[3]}`);
+    break;
+    case process.env.CONFIRMATION:
+      if(selected.ip && selected.ip === message[1])
+        confirmLogs.log(`${message[1]} - ${message[2]}`);     
+      
+      connectedCount--;
+      connectedTourniquets.push({timestamp:moment().format('HH:mm:ss'),connected:connectedCount});
+    break;
+    case process.env.ERROR:
+      if(selected.ip && selected.ip === message[1])
+        errorLogs.log(`${message[1]} - ${message[2]}`);       
+      
+      connectedCount--;
+      connectedTourniquets.push({timestamp:moment().format('HH:mm:ss'),connected:connectedCount});
+    break;
   }
+  renderData();
+});
 
-  tree.setData({
+const renderData = () => {  
+  const treeData = {};
+  for (let [ ip ] of tourniquets) {
+    const title = ip;
+    treeData[title] = {};
+  }
+  
+  tree.setData({ 
     extended: true,
-    children: treeData
-  })
+    children: Object.assign({},treeData,{'Acciones':{extended: true,children:{'Reiniciar':{}}}})
+  });
 
-  renderMetric()
-}
+  renderActivity();  
+};
 
-function renderMetric () {
-  if (!selected.uuid && !selected.type) {
-    line.setData([{ x: [], y: [], title: '' }])
-    screen.render()
-    return
-  }
-
-  const metrics = agentMetrics.get(selected.uuid)
-  const values = metrics[selected.type]
+const renderActivity = () => {  
+  const values = connectedTourniquets;
   const series = [{
-    title: selected.type,
+    title: 'Conexiones',
     x: values.map(v => v.timestamp).slice(-10),
-    y: values.map(v => v.value).slice(-10)
-  }]
+    y: values.map(v => v.connected).slice(-10)
+  }];
 
-  line.setData(series)
-  screen.render()
-}
+  line.setData(series);
+  screen.render();
+};
 
 screen.key([ 'escape', 'q', 'C-c' ], (ch, key) => {
-  process.exit(0)
-})
+  process.exit(0);
+});
 
-agent.connect()
-tree.focus()
-screen.render()
+tree.on('select', node => {    
+  const { name } = node;
+  selected.ip = name;    
+});
+
+tree.focus();
+screen.render();
+follower.close();

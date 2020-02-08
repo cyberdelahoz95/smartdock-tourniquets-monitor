@@ -2,16 +2,30 @@
   "name": "smartdock-tourniquets-monitor",
   "version": "1.0.0",
   "description": "",
-  "main": "index.js",
+  "main": "temp.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "lint": "eslint ./ --fix",
+    "start": "node terminal.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/cyberdelahoz95/smartdock-tourniquets-monitor.git"
   },
   "author": "",
   "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/cyberdelahoz95/smartdock-tourniquets-monitor/issues"
+  },
+  "homepage": "https://github.com/cyberdelahoz95/smartdock-tourniquets-monitor#readme",
   "dependencies": {
+    "text-file-follower": "^0.1.0",
     "blessed": "^0.1.81",
     "blessed-contrib": "^4.8.18",
-    "moment": "^2.24.0",
-    "mqtt": "^3.0.0"
+    "chalk": "^3.0.0",
+    "moment": "^2.24.0"
+  },
+  "devDependencies": {
+    "dotenv": "^8.2.0",
+    "eslint": "^6.8.0"
   }
 }
