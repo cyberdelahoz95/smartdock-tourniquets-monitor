@@ -12,7 +12,7 @@ const contrib = require('blessed-contrib');
 const moment = require('moment');
 const follow = require('text-file-follower');
 
-const follower = follow('/home/cyberdelahoz95/Developer/service.log');
+const follower = follow('');
 let connectedCount = 0;
 
 const screen = blessed.screen();
